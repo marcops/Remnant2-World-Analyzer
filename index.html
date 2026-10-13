@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remnant 2 World Analyzer</title>
+  <meta name="description" content="Reads Remnant 2 saves (profile.sav, save_N.sav) in the browser: what is in your world and what you still need. Work in progress.">
+  <meta name="theme-color" content="#f5f3ef">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23151618'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='%23d9813f' font-family='Arial' font-weight='700'%3ER2%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script>try { if (JSON.parse(localStorage.getItem('r2.theme')) === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
+  <script src="js/version.js"></script>
+  <script src="js/sav.js"></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Remnant 2 World Analyzer</h1>
+      <p class="sub">Remnant 2 — what is in your saves (work in progress: the save format is being studied)</p>
+    </div>
+    <div class="top-right">
+      <div class="top-row">
+        <div id="status" class="status" hidden></div>
+        <button id="theme" class="btn small" type="button" title="Dark / light theme" aria-label="Dark / light theme">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="loader" class="loader">
+      <div id="drop" class="drop" tabindex="0">
+        <p class="drop-title">Drop <b>profile.sav</b> and <b>save_N.sav</b> here</p>
+        <p class="drop-hint">or <label class="link">click to choose<input id="file" type="file" accept=".sav" multiple hidden></label></p>
+        <p class="drop-path">Save folder (Steam): <code>%USERPROFILE%\Saved Games\Remnant2\Steam\&lt;number&gt;</code></p>
+        <p class="drop-hint">With <b>Start.bat</b> (local server) the saves are read from that folder automatically.</p>
+      </div>
+      <p id="load-error" class="error" hidden></p>
+    </section>
+
+    <section id="app" hidden>
+      <div id="files"></div>
+    </section>
+
+    <p class="version" id="version"></p>
+  </main>
+</body>
+</html>
