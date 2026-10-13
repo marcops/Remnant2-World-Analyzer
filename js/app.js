@@ -1,4 +1,4 @@
-/* global R2_SAV, R2_VERSION */
+/* global R2_SAV, R2_GVAS, R2_VERSION */
 // Remnant 2 World Analyzer — page logic. For now: load the saves (automatically through Start.bat, or
 // dropped in), decompress them and show what each one holds, as the base for studying the format.
 (function () {
@@ -17,8 +17,9 @@
     var names = Object.keys(state.files).sort();
     return Promise.all(names.map(function (n) {
       return R2_SAV.decompress(state.files[n]).then(function (r) {
-        var strings = R2_SAV.strings(r.data);
-        state.info[n] = { ok: true, size: state.files[n].byteLength, raw: r.data.length, chunks: r.chunks, version: r.head.version, strings: strings };
+        var strings = R2_SAV.strings(r.data), save = null, err = null;
+        try { save = R2_GVAS.readFile(r.data); } catch (e) { err = e.message; }
+        state.info[n] = { ok: true, size: state.files[n].byteLength, raw: r.data.length, chunks: r.chunks, version: r.head.version, strings: strings, save: save, readError: err };
       }).catch(function (e) { state.info[n] = { ok: false, error: e.message }; });
     })).then(render);
   }
@@ -36,13 +37,24 @@
         (groups[k] = groups[k] || []).push(s.text);
       });
       return '<section class="panel wide"><h3>' + esc(n) + ' <span class="cat">' + esc(cls) + '</span></h3>' +
-        '<p class="cat">' + num(i.size) + ' bytes on disk · ' + i.chunks + ' compressed chunks · ' + num(i.raw) + ' bytes decompressed · container version ' + i.version + ' · ' + i.strings.length + ' strings</p>' +
+        '<p class="cat">' + num(i.size) + ' bytes on disk · ' + i.chunks + ' compressed chunks · ' + num(i.raw) + ' bytes decompressed · container version ' + i.version + ' · ' + i.strings.length + ' strings' +
+        (i.save ? ' · ' + i.save.objects.length + ' objects · ' + i.save.names.length + ' names' : '') + '</p>' +
+        (i.readError ? '<p class="error">Properties: ' + esc(i.readError) + '</p>' : i.save ? rootTable(i.save.root.props) : '') +
         Object.keys(groups).sort().map(function (g) {
           return '<details><summary>' + esc(g) + ' <span class="cat">' + groups[g].length + '</span></summary><p class="cat" style="word-break:break-all">' + groups[g].slice(0, 400).map(esc).join('<br>') + '</p></details>';
         }).join('') + '</section>';
     }).join('');
     $('loader').hidden = names.length > 0;
     $('app').hidden = names.length === 0;
+  }
+
+  // The save's top-level fields: numbers and texts as they are, lists and objects summed up.
+  function rootTable(props) {
+    var rows = Object.keys(props).map(function (k) {
+      var v = props[k], shown = Array.isArray(v) ? v.length + ' entries' : v && typeof v === 'object' ? (v.path ? String(v.path).split('/').pop() : 'object') : String(v);
+      return '<tr><th>' + esc(k) + '</th><td>' + esc(shown) + '</td></tr>';
+    });
+    return '<table class="kv">' + rows.join('') + '</table>';
   }
 
   // Dropped or chosen files.

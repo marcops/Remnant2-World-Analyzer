@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const SAV = require('../js/sav.js');
+const G = require('../js/gvas.js');
 
 // A save with the same container layout: header + one zlib chunk.
 function build(payload) {
@@ -38,5 +39,11 @@ for (const [name, env] of [['world save', 'R2_SAVE'], ['profile', 'R2_PROFILE']]
     assert.ok(r.data.length > 1000);
     const strings = SAV.strings(r.data).map((s) => s.text);
     assert.match(strings[0], /^\/Game\/_Core\/Blueprints\/Base\/BP_RemnantSaveGame/);
+    // The property reader covers every byte: data -> object table -> name table -> end.
+    const s = G.readFile(r.data), a = s._at;
+    assert.equal(a.dataEnd, a.base + a.objOff, 'objects end where the object table starts');
+    assert.equal(a.objEnd, a.base + a.namesOff, 'object table ends where the name table starts');
+    assert.equal(a.namesEnd, r.data.length, 'name table ends at the last byte');
+    assert.ok(s.objects.length > 10 && s.names.length > 50);
   });
 }

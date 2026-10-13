@@ -41,7 +41,7 @@ chunk's size and the total against the header.
 | save_0.sav | 308,380 | 25 | 3,210,120 |
 | _save_0.sav | 322,984 | 29 | 3,769,466 |
 
-## Decompressed data (first look)
+## Decompressed data: the Remnant 1 property format (checked byte by byte)
 
 ```
 u32  size of what follows
@@ -53,6 +53,26 @@ FString  class name       (BP_RemnantSaveGameProfile_C, BP_RemnantSaveGame_C)
 ...
 ```
 
+Then exactly the layout of Remnant 1 saves (js/gvas.js is the Remnant 1 analyzer's reader):
+
+```
+u64  name table offset    \  both count from 8 bytes BEFORE the decompressed data
+u32  version (1)           |  (they include the file's [checksum][size]):
+u64  object table offset  /   position in the data = offset - 8
+objects: [u32 index][u32 size][properties][u8 has components][components…]
+object table: u32 count, then [u8 loaded][FString path] (+10 bytes when not loaded)
+name table:   u32 count, then FStrings
+properties:   [u16 name][u16 type][u32 size][u32 array index][u8 has guid][value] … "None"
+```
+
+Checked on profile.sav, save_0.sav and _save_0.sav: the objects' data ends exactly where the object
+table starts, the object table exactly where the name table starts, and the name table at the last byte.
+
+| File | Objects | Names | Top-level fields |
+|---|---|---|---|
+| profile.sav | 29 | 180 | LoadscreenTipIndex, Characters (5), ActiveCharacterIndex, bHasEverCompletedIntro, SavedMatchmakingRegion, AccountAwards (21) |
+| save_0.sav | 144 | 176 | QuestLabel ("The Ruins"), Difficulty ("Hard"), DifficultyScalar, TimePlayed (159,396 s), QuestFailCount (101), RolledOneShots, ZoneIDGen, QuestIDGen, Containers (143) … |
+
 Strings seen so far:
 - profile: archetypes (`Archetype_Archon_UI`, `Archetype_Challenger_UI`), weapons (`Weapon_Enigma`,
   `Weapon_Monolith`, `Weapon_KrellAxe`), armor (`Armor_*_FaeRoyalGuard`), consumables.
@@ -62,8 +82,8 @@ Strings seen so far:
 
 ## Next
 
-1. The property layout after the header (names table? objects? — compare with Remnant 1's format).
-2. Characters, archetypes and inventory in the profile.
+1. Characters, archetypes and inventory in the profile (the Characters objects and their blobs).
+2. The game's file list: `tools/utoc.mjs` reads the IoStore index (.utoc, not encrypted; contents are Oodle-compressed) — 747,000 paths, the same paths the saves use.
 3. The world: zones, quests/events and their state, as in Remnant 1.
 4. Item names and paths from the game's IoStore index (`.utoc`), like the Hardened Carapace in Remnant 1.
 5. The checksum, only needed to write saves.
