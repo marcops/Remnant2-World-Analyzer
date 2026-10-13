@@ -80,10 +80,42 @@ Strings seen so far:
   (`Quest_Story_OneTrueKing`, `Quest_Story_Asylum`, `Quest_Story_Ravager`, `Quest_Story_TheCore`),
   events (`Quest_Event_Ring_FeedbackLoop`).
 
+## Characters (profile.sav)
+
+`Characters[]` holds SavedCharacter objects (Archetype, SecondaryArchetype, TraitRank, PowerLevel, ItemLevel…)
+and a `CharacterData` blob. Remnant 2 blobs start with one more u32 than Remnant 1's:
+`[u32 0x20A][u32 0x3F1][u64 names][u32 1][u64 objects]`, offsets from the blob's start — checked byte by
+byte (998 objects, 181 names, ends at the blob's last byte). Its root (Character_Master_Player) has the
+components Inventory (Items[]: ID, ItemBP, New, Favorited, Hidden, EquipmentSlotIndex, InstanceData {Level,
+Ammo…}), Traits (TraitPoints, Traits[]: TraitBP, Level — real traits Trait_*, archetype levels Archetype_*,
+perks Perk_*, skill traits SkillTrait_*), Progression (Experience), DragonHearts, Challenge, ammo, stamina.
+
+## The item catalog (js/catalog.js, built by tools/catalog.mjs from the game's .utoc indexes)
+
+Item kinds by file name: Weapon_, Armor_Head/Body/Legs/Gloves_, Ring_, Amulet_, Mod_, MetaGem_ (mutators),
+Relic_Consumable_ (relics), RelicFragment_, Engram_ (archetypes), Trait_.
+- An item is <prefix>_<its folder> (Items/Trinkets/Rings/BoosterRing/Ring_BoosterRing), or, when the folder
+  has another name, any file with an item prefix that isn't a support file (_Inspect, _AnimBP, _Stats,
+  _Action, _VisualSet… — the full list in the tool, reviewed by hand).
+- Not items: bare hands/body (Weapon_Unarmed, *_Nude), archetype skill weapons (Engineer turrets, Warden
+  drone), Armor_*_Base/Default, a weapon's second form, the Ragged Poppet, a stray Ring_Offering_Stone
+  (the real ring, Ring_OfferingStone, has the inspect screen, the action and the event that gives it).
+- Every real weapon, armor piece, ring, amulet and archetype has an inspect screen (<name>_Inspect); the 16
+  without one and not in a save are listed apart as unconfirmed (Remnant 1 leftovers, the DLC4 folder's
+  Gambler and Paragon). Mods, mutators, relic fragments and traits never have one.
+- A weapon's own mod never shows up in the bag (the save holds Enigma, Monolith, Deceit, Nebula, none of
+  their mods): it lives in the weapon's folder and comes with it (40 of them).
+- Checked: every item the character holds is in the catalog (test), the 43 Trait_ files are all there.
+
+| Weapons | Mods | Mutators | Armor pieces | Amulets | Rings | Relics | Relic fragments | Traits | Archetypes |
+|---|---|---|---|---|---|---|---|---|---|
+| 110 | 80 | 68 | 121 | 103 | 225 | 26 | 59 | 43 | 14 |
+
+Names come from the file names (Weapon_WorldsEdge -> "Worlds Edge"): the game's display texts are inside the
+Oodle-compressed contents.
+
 ## Next
 
-1. Characters, archetypes and inventory in the profile (the Characters objects and their blobs).
-2. The game's file list: `tools/utoc.mjs` reads the IoStore index (.utoc, not encrypted; contents are Oodle-compressed) — 747,000 paths, the same paths the saves use.
-3. The world: zones, quests/events and their state, as in Remnant 1.
-4. Item names and paths from the game's IoStore index (`.utoc`), like the Hardened Carapace in Remnant 1.
-5. The checksum, only needed to write saves.
+1. Display names (the game's localization is Oodle-compressed) and how to get each item.
+2. The world save: zones, quests/events and their state, as in Remnant 1 — what can drop in your world.
+3. The checksum, only needed to write saves.

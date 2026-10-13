@@ -4,21 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Remnant 2 World Analyzer</title>
-  <meta name="description" content="Reads Remnant 2 saves (profile.sav, save_N.sav) in the browser: what is in your world and what you still need. Work in progress.">
+  <meta name="description" content="Reads Remnant 2 saves (profile.sav, save_N.sav) in the browser: every weapon, armor piece, ring, amulet, mod, mutator, relic, trait and archetype of the game, and which ones you still need.">
   <meta name="theme-color" content="#f5f3ef">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23151618'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='%23d9813f' font-family='Arial' font-weight='700'%3ER2%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/app.css">
+  <style>
+    .tabs.top-tabs { flex-direction: row; gap: 4px; margin: 6px 0 14px; border-bottom: 1px solid var(--line); }
+    .tabs.top-tabs .tab { border-left: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; }
+    .tabs.top-tabs .tab.active { border-bottom-color: var(--accent); }
+    button.card { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+    button.card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .card .bar { margin-top: 8px; } .card .bar > i { background: var(--accent); }
+    .ilist { list-style: none; margin: 0; padding: 0; columns: 3 260px; column-gap: 24px; }
+    .ilist li { break-inside: avoid; padding: 3px 0; font-size: 14px; }
+    .ilist li.miss { font-weight: 600; } .ilist li.have { color: var(--muted); }
+    .ilist .st { display: inline-block; width: 14px; } .ilist li.have .st { color: var(--ok); } .ilist li.miss .st { color: var(--miss); }
+    .unconfirmed { margin-top: 18px; }
+  </style>
   <script>try { if (JSON.parse(localStorage.getItem('r2.theme')) === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
   <script src="js/version.js"></script>
+  <script src="js/catalog.js"></script>
   <script src="js/sav.js"></script>
   <script src="js/gvas.js"></script>
+  <script src="js/character.js"></script>
   <script src="js/app.js" defer></script>
 </head>
 <body>
   <header class="top">
     <div class="brand">
       <h1>Remnant 2 World Analyzer</h1>
-      <p class="sub">Remnant 2 — what is in your saves (work in progress: the save format is being studied)</p>
+      <p class="sub">Remnant 2 — every collectible of the game, and which ones you still need</p>
     </div>
     <div class="top-right">
       <div class="top-row">
@@ -40,7 +55,20 @@
     </section>
 
     <section id="app" hidden>
-      <div id="files"></div>
+      <div id="who"></div>
+      <nav class="tabs top-tabs" role="tablist">
+        <button class="tab" data-tab="items" role="tab">Items</button>
+        <button class="tab" data-tab="files" role="tab">Save files</button>
+      </nav>
+      <div id="tab-items">
+        <div id="items-cards"></div>
+        <div class="filters"><input id="items-search" type="search" placeholder="Search item…"></div>
+        <div id="items-filters" class="filters"></div>
+        <div id="items-view"></div>
+      </div>
+      <div id="tab-files" hidden>
+        <div id="files"></div>
+      </div>
     </section>
 
     <p class="version" id="version"></p>

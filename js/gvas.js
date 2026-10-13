@@ -56,6 +56,7 @@
   function readSave(bytes, base, outer) {
     var r = new Reader(bytes, base), rel = base;
     if (outer === 'r2') { r.u32(); r.u32(); r.u32(); r.u32(); r.str(); r.str(); rel = base - 8; }
+    else if (outer === 'r2blob') { r.u32(); r.u32(); }   // Remnant 2 blobs: [u32 0x20A][u32 0x3F1], one more than Remnant 1
     else {
       if (outer) r.pos += 16;
       r.u32();
@@ -206,6 +207,6 @@
   return {
     // A decompressed Remnant 2 save (js/sav.js).
     readFile: function (buffer) { return readSave(toBytes(buffer), 0, 'r2'); },
-    readBlob: function (buffer, blob) { return readSave(toBytes(buffer), blob.blobAt, false); },
+    readBlob: function (buffer, blob) { return readSave(toBytes(buffer), blob.blobAt, 'r2blob'); },
   };
 });

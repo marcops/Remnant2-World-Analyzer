@@ -47,3 +47,28 @@ for (const [name, env] of [['world save', 'R2_SAVE'], ['profile', 'R2_PROFILE']]
     assert.ok(s.objects.length > 10 && s.names.length > 50);
   });
 }
+
+test('catalog: built from the game files, no duplicate paths or names', () => {
+  const C = require('../js/catalog.js');
+  const keys = new Set(C.items.map((i) => i.key));
+  assert.equal(keys.size, C.items.length, 'duplicate game paths');
+  const names = {};
+  for (const i of C.items) { const k = i.category + '|' + i.name; assert.ok(!names[k], 'two items named ' + k); names[k] = true; }
+  for (const i of C.items.filter((x) => x.comesWith)) assert.ok(keys.has(i.comesWith), i.name + ' comes with a weapon not in the catalog');
+});
+
+test('real profile: every item the character holds is in the catalog', { skip: !process.env.R2_PROFILE && 'set R2_PROFILE' }, async () => {
+  const C = require('../js/catalog.js'), CH = require('../js/character.js');
+  const r = await SAV.decompress(fs.readFileSync(process.env.R2_PROFILE));
+  const keys = new Set(C.items.map((i) => i.key));
+  const KIND = /^(Weapon|Armor_(Head|Body|Legs|Gloves)|Ring|Amulet|Mod|MetaGem|Relic_Consumable|RelicFragment|Engram|Trait)_/;
+  const NOT_ITEMS = /^(Weapon_Unarmed|Armor_(Body|Gloves|Legs|Head)_Nude)$/; // bare hands and body
+  const missing = [];
+  for (const ch of CH.read(r.data).characters.filter(Boolean)) {
+    for (const k of Object.keys(ch.owned)) {
+      const n = k.split('.').pop().replace(/_C$/, '');
+      if (KIND.test(n) && !NOT_ITEMS.test(n) && !keys.has(k)) missing.push(k);
+    }
+  }
+  assert.deepEqual(missing, []);
+});
