@@ -30,6 +30,7 @@
     u32: function () { var v = this.view.getUint32(this.pos, true); this.pos += 4; return v; },
     u64: function () { var lo = this.u32(), hi = this.u32(); return hi * 4294967296 + lo; },
     f32: function () { var v = this.view.getFloat32(this.pos, true); this.pos += 4; return v; },
+    f64: function () { var v = this.view.getFloat64(this.pos, true); this.pos += 8; return v; },
     str: function () {
       var len = this.i32(), s = '', i;
       if (len === 0) return '';
@@ -57,6 +58,8 @@
     var r = new Reader(bytes, base), rel = base;
     if (outer === 'r2') { r.u32(); r.u32(); r.u32(); r.u32(); r.str(); r.str(); rel = base - 8; }
     else if (outer === 'r2blob') { r.u32(); r.u32(); }   // Remnant 2 blobs: [u32 0x20A][u32 0x3F1], one more than Remnant 1
+    // An actor in a world blob: [u32 has transform][80-byte transform] then the offsets, which count from the actor's start.
+    else if (outer === 'r2actor') { if (r.u32()) r.pos += 80; }
     else {
       if (outer) r.pos += 16;
       r.u32();
@@ -71,7 +74,8 @@
     var or = new Reader(bytes, rel + objOff), objects = [], on = or.u32();
     for (i = 0; i < on; i++) {
       var loaded = or.u8(), path = or.str();
-      if (!loaded) or.pos += 10; // FName + outer object index of runtime-created objects
+      // Runtime-created objects: FName (u16, +i32 when the high bit is set) and the outer object's index.
+      if (!loaded) { if (or.u16() & 0x8000) or.i32(); or.u32(); }
       objects.push({ path: path, props: null, comps: null });
     }
 
@@ -81,6 +85,8 @@
       var idx = r.u32(), sizePos = r.pos, size = r.u32(), start = r.pos;
       var obj = objects[idx] || {};
       obj.props = readProps(ctx, r, start + size);
+      // Bytes after the properties' None (a ZoneActor keeps the visited map cells there).
+      if (r.pos < start + size) obj.extra = { at: r.pos, length: start + size - r.pos };
       at(obj, { sizePos: sizePos, start: start, size: size });
       r.pos = start + size;
       obj.comps = {};
@@ -89,6 +95,8 @@
         for (var c = 0; c < cn; c++) {
           var key = r.str(), csz = r.u32(), c0 = r.pos;
           obj.comps[key] = readProps(ctx, r, c0 + csz);
+          // Bytes after the component's None (a ZoneActor's MapGen keeps its tiles there), out of sight like _at.
+          if (r.pos < c0 + csz) Object.defineProperty(obj.comps[key], '_extra', { value: { at: r.pos, length: c0 + csz - r.pos }, enumerable: false });
           r.pos = c0 + csz;
         }
       }
@@ -208,5 +216,33 @@
     // A decompressed Remnant 2 save (js/sav.js).
     readFile: function (buffer) { return readSave(toBytes(buffer), 0, 'r2'); },
     readBlob: function (buffer, blob) { return readSave(toBytes(buffer), blob.blobAt, 'r2blob'); },
+    // A world blob (save_N.sav's Containers[]: one level each) is a PersistenceContainer, as in
+    // lib.remnant2.saves (MIT): [u32 version][i32 index offset][i32 dynamic offset], offsets from the blob start.
+    // Index: count × {u64 id, i32 offset, i32 size}, then the destroyed actors (count × u64). Each actor:
+    // [u32 has transform][transform: 10 doubles][archive]. Dynamic: count × {u64 id, transform, FString path, FString name}.
+    readContainer: function (buffer, blob) {
+      var bytes = toBytes(buffer), b = blob.blobAt, r = new Reader(bytes, b), i;
+      var version = r.u32(), indexOff = r.u32(), dynOff = r.u32();
+      var transform = function (rr) { var t = []; for (var k = 0; k < 10; k++) t.push(rr.f64()); return { rot: t.slice(0, 4), pos: t.slice(4, 7), scale: t.slice(7, 10) }; };
+      r.pos = b + indexOff;
+      var n = r.u32(), infos = [];
+      for (i = 0; i < n; i++) infos.push({ id: r.u64(), off: r.u32(), size: r.u32() });
+      var destroyed = [], dn = r.u32();
+      for (i = 0; i < dn; i++) destroyed.push(r.u64());
+      var actors = infos.map(function (inf) {
+        var ar = new Reader(bytes, b + inf.off), a = { id: inf.id };
+        if (ar.u32()) a.transform = transform(ar);
+        try { a.archive = readSave(bytes, b + inf.off, 'r2actor'); } catch (e) { a.error = e.message; }
+        return a;
+      });
+      r.pos = b + dynOff;
+      var dc = r.u32(), byId = {};
+      actors.forEach(function (a) { byId[a.id] = a; });
+      for (i = 0; i < dc; i++) {
+        var id = r.u64(), t = transform(r), path = r.str(), name = r.str();
+        if (byId[id]) byId[id].dynamic = { transform: t, path: path, name: name };
+      }
+      return { version: version, actors: actors, destroyed: destroyed };
+    },
   };
 });

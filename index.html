@@ -4,74 +4,312 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Remnant 2 World Analyzer</title>
-  <meta name="description" content="Reads Remnant 2 saves (profile.sav, save_N.sav) in the browser: every weapon, armor piece, ring, amulet, mod, mutator, relic, trait and archetype of the game, and which ones you still need.">
+  <meta name="description" content="Free Remnant 2 save analyzer: every weapon, armor piece, ring, amulet, mod, mutator, relic, trait and archetype of the game and its DLCs, which ones you still need, and how to get them.">
   <meta name="theme-color" content="#f5f3ef">
+  <link rel="canonical" href="https://marcops.github.io/Remnant2-World-Analyzer/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23151618'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='%23d9813f' font-family='Arial' font-weight='700'%3ER2%3C/text%3E%3C/svg%3E">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Remnant 2 World Analyzer",
+    "url": "https://marcops.github.io/Remnant2-World-Analyzer/",
+    "applicationCategory": "GameApplication",
+    "operatingSystem": "Any (web browser)",
+    "softwareVersion": "0.4",
+    "dateModified": "2026-10-13",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Reads Remnant 2 save files (profile.sav, save_N.sav) in the browser and shows every collectible of the game and its DLCs — weapons, mods, mutators, armor, amulets, rings, relics, relic fragments, traits, archetypes, prisms, concoctions, consumables and quest items — as had or missing, with how to get each one."
+  }
+  </script>
   <link rel="stylesheet" href="css/app.css">
   <style>
-    .tabs.top-tabs { flex-direction: row; gap: 4px; margin: 6px 0 14px; border-bottom: 1px solid var(--line); }
-    .tabs.top-tabs .tab { border-left: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; }
-    .tabs.top-tabs .tab.active { border-bottom-color: var(--accent); }
-    button.card { text-align: left; font: inherit; color: inherit; cursor: pointer; }
-    button.card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-    .card .bar { margin-top: 8px; } .card .bar > i { background: var(--accent); }
-    .ilist { list-style: none; margin: 0; padding: 0; columns: 3 260px; column-gap: 24px; }
+    .ilist { list-style: none; margin: 0; padding: 0; columns: 2 340px; column-gap: 24px; }
     .ilist li { break-inside: avoid; padding: 3px 0; font-size: 14px; }
     .ilist li.miss { font-weight: 600; } .ilist li.have { color: var(--muted); }
     .ilist .st { display: inline-block; width: 14px; } .ilist li.have .st { color: var(--ok); } .ilist li.miss .st { color: var(--miss); }
+    .ilist summary { cursor: pointer; list-style: none; } .ilist summary::-webkit-details-marker { display: none; }
+    .ilist .ico { display: inline-block; width: 26px; height: 26px; object-fit: contain; vertical-align: middle; margin-right: 6px; }
+    .ilist li.have img.ico { opacity: .55; }
+    .ilist details[open] { background: var(--panel-2); border-radius: 6px; padding: 4px 6px; margin: 2px -6px; }
+    .ilist .more { font-weight: 400; color: var(--text); padding: 4px 0 2px 20px; font-size: 13px; }
+    .ilist .more p { margin: 4px 0; } .ilist .more ul, .tdrawer ul { margin: 2px 0 4px; padding-left: 18px; }
+    .lore { font-style: italic; color: var(--muted); }
+    .flag { font-size: 11px; color: var(--accent); font-weight: 600; }
+    .ttile .flag { margin-top: -4px; }
     .unconfirmed { margin-top: 18px; }
+    .kv.dps td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .kv.dps tr.changed th { font-weight: 700; }
+    .card .w .ico { width: 20px; height: 20px; vertical-align: middle; margin-right: 4px; }
+    /* Current world */
+    .events td.items .evitem { margin: 1px 0; white-space: nowrap; }
+    .evitem.picked { color: var(--muted); }
+    .evitem.picked .pk { font-size: 11px; color: var(--muted); margin-left: 4px; }
+    .evitem.miss { font-weight: 600; }
+    .done-tag { font-size: 11px; color: var(--ok); margin-left: 6px; font-weight: 600; }
+    .rare-row td.name { color: var(--accent); }
+    /* Map: areas of a world, linked */
+    .agraph-wrap { overflow-x: auto; }
+    svg.agraph { display: block; }
+    .agraph line { stroke: var(--line); stroke-width: 2; }
+    .agraph .node rect.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 6; }
+    .agraph .node.boss rect.box { stroke: var(--miss); }
+    .agraph .node.want rect.box { stroke: var(--accent); stroke-width: 2.5; }
+    .agraph .node.unseen rect.box { stroke-dasharray: 4 3; }
+    .agraph .node rect.noico { fill: var(--panel-2); stroke: var(--line); }
+    .agraph .node text { font-size: 11px; fill: var(--text); }
+    .agraph .node text.name { font-size: 12px; font-weight: 700; }
+    .agraph .node text.sub { font-size: 10px; fill: var(--muted); }
+    .agraph .node text.sub.boss { fill: var(--miss); }
+    .agraph .node text.sub.done { fill: var(--ok); }
+    .agraph .node text.rare { font-size: 10.5px; fill: var(--accent); font-weight: 700; }
+    .agraph .node:hover rect.box { stroke: var(--accent); }
+    .agraph a { cursor: pointer; }
+    svg.zfog rect { fill: var(--accent); }
+    /* Map: the tiles of an area */
+    .tsqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+    .tsq { background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; min-width: 0; }
+    .tsq.t-start { border-left-color: var(--ok); }
+    .tsq.t-exit { border-left-color: var(--now); }
+    .tsq.t-poi { border-left-color: var(--accent); }
+    .tsq.empty { opacity: .6; }
+    .tsq.has { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+    .tsq .th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .tsq .tn { font-size: 12px; font-weight: 600; margin-bottom: 2px; word-break: break-word; }
+    .tsq .tl { margin-top: 2px; } .tsq .tl.want { font-weight: 700; } .tsq .tl.rare { color: var(--accent); font-weight: 700; } .tsq .tl.now { color: var(--now); }
+    .tsq .tl .ico { width: 18px; height: 18px; } .tsq .tl .st { width: 12px; }
+    .here .want { font-weight: 700; }
+    a[data-item] { color: inherit; text-decoration: none; } a[data-item]:hover { color: var(--accent); }
+    .panel .ico, .meter .ico { width: 22px; height: 22px; object-fit: contain; vertical-align: middle; margin-right: 6px; display: inline-block; }
   </style>
+  <!-- Dark theme only when picked with the ☾ button; set before the page draws to avoid a flash. -->
   <script>try { if (JSON.parse(localStorage.getItem('r2.theme')) === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
   <script src="js/version.js"></script>
   <script src="js/catalog.js"></script>
+  <script src="js/wiki.js"></script>
   <script src="js/sav.js"></script>
   <script src="js/gvas.js"></script>
   <script src="js/character.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/editor.js"></script>
   <script src="js/app.js" defer></script>
 </head>
 <body>
   <header class="top">
     <div class="brand">
       <h1>Remnant 2 World Analyzer</h1>
-      <p class="sub">Remnant 2 — every collectible of the game, and which ones you still need</p>
+      <p class="sub">Remnant 2 — every collectible of the game and its DLCs, and which ones you still need</p>
     </div>
     <div class="top-right">
       <div class="top-row">
         <div id="status" class="status" hidden></div>
         <button id="theme" class="btn small" type="button" title="Dark / light theme" aria-label="Dark / light theme">☾</button>
       </div>
+      <div class="picker">
+        <label class="field">Character
+          <select id="character"></select>
+        </label>
+        <button id="reload" class="btn small" type="button">Load other files</button>
+      </div>
     </div>
   </header>
 
   <main>
+    <div class="layout">
+    <div class="sidebar">
+    <div class="who" id="who"></div>
+    <nav class="tabs" role="tablist">
+      <div class="navdata">
+          <div class="nav-sec">World</div>
+          <button class="tab active" data-tab="world" role="tab"><span class="ic">☰</span>Current world</button>
+          <button class="tab" data-tab="map" role="tab"><span class="ic">⌗</span>Map</button>
+          <button class="tab" data-tab="state" role="tab"><span class="ic">◈</span>World state</button>
+          <button class="tab" data-tab="tips" role="tab"><span class="ic">✦</span>Tips</button>
+          <div class="nav-sec">Collection</div>
+          <button class="tab" data-tab="items" role="tab"><span class="ic">▣</span>Items</button>
+          <button class="tab" data-tab="missing" role="tab"><span class="ic">▦</span>Checklist</button>
+          <button class="tab" data-tab="traits" role="tab"><span class="ic">✧</span>Traits &amp; archetypes</button>
+          <button class="tab" data-tab="character" role="tab"><span class="ic">☺</span>My character</button>
+          <button class="tab" data-tab="build" role="tab"><span class="ic">⚔</span>Build &amp; DPS</button>
+          <div class="nav-sec">Advanced</div>
+          <button class="tab" data-tab="raw" role="tab"><span class="ic">{}</span>Raw data</button>
+          <button class="tab" data-tab="editor" role="tab"><span class="ic">✎</span>Save editor</button>
+      </div>
+      <div class="nav-sec">Info</div>
+      <button class="tab" data-tab="home" id="nav-home" role="tab"><span class="ic">⇪</span>Load your save</button>
+      <button class="tab" data-tab="about" role="tab"><span class="ic">ⓘ</span>About</button>
+      <button class="tab" data-tab="credits" role="tab"><span class="ic">♥</span>Version &amp; credits</button>
+      <button class="tab" data-tab="notes" role="tab"><span class="ic">✎</span>Release notes</button>
+    </nav>
+    </div>
+    <div class="panels-area">
     <section id="loader" class="loader">
       <div id="drop" class="drop" tabindex="0">
         <p class="drop-title">Drop <b>profile.sav</b> and <b>save_N.sav</b> here</p>
-        <p class="drop-hint">or <label class="link">click to choose<input id="file" type="file" accept=".sav" multiple hidden></label></p>
-        <p class="drop-path">Save folder (Steam): <code>%USERPROFILE%\Saved Games\Remnant2\Steam\&lt;number&gt;</code></p>
-        <p class="drop-hint">With <b>Start.bat</b> (local server) the saves are read from that folder automatically.</p>
+        <p class="drop-hint">or <label class="link">click to choose<input id="file" type="file" accept=".sav" multiple hidden></label> — in the folder, press <kbd>Ctrl</kbd>+<kbd>A</kbd> to pick them all at once</p>
+        <p class="drop-path">Save folder (Steam):
+          <code id="save-path">%USERPROFILE%\Saved Games\Remnant2\Steam\&lt;number&gt;</code>
+          <button id="copy-path" class="btn small" type="button">Copy</button>
+        </p>
+        <p class="drop-hint download">Want to run it locally, fully automatic? <a class="link" href="https://github.com/marcops/Remnant2-World-Analyzer/archive/refs/heads/master.zip">Download it here</a>, extract and double-click <b>Start.bat</b> (Windows): it finds your saves by itself and refreshes whenever the game saves. Source on <a class="link" href="https://github.com/marcops/Remnant2-World-Analyzer" target="_blank" rel="noopener">GitHub</a>.</p>
       </div>
       <p id="load-error" class="error" hidden></p>
     </section>
 
     <section id="app" hidden>
-      <div id="who"></div>
-      <nav class="tabs top-tabs" role="tablist">
-        <button class="tab" data-tab="items" role="tab">Items</button>
-        <button class="tab" data-tab="files" role="tab">Save files</button>
-      </nav>
-      <div id="tab-items">
-        <div id="items-cards"></div>
-        <div class="filters"><input id="items-search" type="search" placeholder="Search item…"></div>
-        <div id="items-filters" class="filters"></div>
+      <p id="profile-note" class="note" hidden>No <b>profile.sav</b>: can't tell what you already have. Load profile.sav too.</p>
+
+      <div id="tab-world" class="tab-panel">
+        <div id="world-view"></div>
+      </div>
+
+      <div id="tab-map" class="tab-panel" hidden>
+        <div id="map-view"></div>
+      </div>
+
+      <div id="tab-items" class="tab-panel" hidden>
+        <div class="filters"><input id="items-search" type="search" placeholder="Search item, effect or how to get it…"></div>
         <div id="items-view"></div>
       </div>
-      <div id="tab-files" hidden>
+
+      <div id="tab-missing" class="tab-panel" hidden>
+        <div class="seg" id="missing-mode-switch"></div>
+        <h3 class="section-title">By item type</h3>
+        <div id="collection" class="collection"></div>
+        <h3 class="section-title">By mode</h3>
+        <div id="modes" class="collection"></div>
+        <h3 class="section-title">By world</h3>
+        <div id="summary" class="summary"></div>
+        <div class="filters">
+          <input id="missing-search" type="search" placeholder="Search item or how to obtain…">
+          <label class="check"><input id="missing-only-now" type="checkbox"> Only what I can get in my world right now</label>
+          <label class="check"><input id="missing-show-owned" type="checkbox"> Also show what I already have</label>
+        </div>
+        <div id="missing-list"></div>
+        <div id="missing-extra"></div>
+      </div>
+
+      <div id="tab-traits" class="tab-panel" hidden>
+        <div id="traits-view"></div>
+      </div>
+
+      <div id="tab-character" class="tab-panel" hidden>
+        <div id="character-view"></div>
+      </div>
+
+      <div id="tab-build" class="tab-panel" hidden>
+        <div id="build-view"></div>
+      </div>
+
+      <div id="tab-state" class="tab-panel" hidden>
+        <div id="state-view"></div>
+      </div>
+
+      <div id="tab-tips" class="tab-panel" hidden>
+        <div id="tips-view"></div>
+      </div>
+
+      <div id="tab-editor" class="tab-panel" hidden>
+        <div id="editor-view"></div>
+      </div>
+
+      <div id="tab-raw" class="tab-panel" hidden>
         <div id="files"></div>
       </div>
     </section>
 
-    <p class="version" id="version"></p>
+  <section id="tab-about" class="tab-panel about" hidden>
+    <h2>About Remnant 2 World Analyzer</h2>
+    <div class="ibox">
+      <p>A free save analyzer for <b>Remnant 2</b>, the sibling of <a href="https://marcops.github.io/Remnant-World-Analyzer/" target="_blank" rel="noopener">Remnant World Analyzer</a> (Remnant: From the Ashes). Load your save and it shows every collectible of the game and its DLCs — The Awakened King, The Forgotten Kingdom and The Dark Horizon — as had or missing: weapons, mods, mutators, armor pieces, amulets, rings, relics, relic fragments, traits, archetypes, prisms, concoctions, consumables and quest items, each with its icon, what it does and how to get it.</p>
+      <p>The list of items is read from the game's own files (the same paths the save uses), checked against a community item database and the wiki. It is free, needs no install or account, and works in any browser.</p>
+    </div>
+    <div class="ibox">
+      <h3>What it shows</h3>
+      <ul class="about-list">
+        <li><b>Current world</b> — your campaign or adventure: every area, its bosses, dungeons, events, rings and amulets on the ground, trait books and simulacrums, what each drops and whether you have it (✔) or not (✘), and what you already picked up there.</li>
+        <li><b>Map</b> — the areas of each world linked as in the game, the part of each area you have explored, and what is still lying there.</li>
+        <li><b>World state</b> — difficulty, time played, respawn point, quest items carried, areas visited and events done per world.</li>
+        <li><b>Tips</b> — what to do next: simulacrums and trait books still in your world, items you don't have that can drop there, what to buy from each vendor.</li>
+        <li><b>Items</b> — every collectible as a picture, filtered by what you have or don't have, type and world/DLC; click one for what it does, how to get it and its wiki page.</li>
+        <li><b>Checklist</b> — "x of y" with percentages by item type and by world, and the list of what you're missing with how to get each one.</li>
+        <li><b>Traits &amp; archetypes</b> — every trait and archetype with your level in each, your trait rank and trait points.</li>
+        <li><b>My character</b> — archetypes, power level, item level, Dragon Heart and your equipped gear with upgrade levels.</li>
+        <li><b>Build &amp; DPS</b> — damage per second of your guns and damage per hit of your melee weapons at their upgrade level, from the wiki's stats, and what they reach at max level.</li>
+        <li><b>Raw data</b> — everything stored in your save files, browsable.</li>
+        <li><b>Save editor</b> — change your scrap, irons, Lumenite, Relic Dust, Tomes of Knowledge and trait points. With Start.bat it saves to the game folder (game closed, folder backed up first); on the website it downloads the edited profile.sav.</li>
+      </ul>
+    </div>
+    <div class="ibox">
+      <h3>Where are the Remnant 2 save files?</h3>
+      <p>On PC (Steam) they are in <code>%USERPROFILE%\Saved Games\Remnant2\Steam\&lt;number&gt;</code>. <code>profile.sav</code> holds your characters and everything they own; <code>save_N.sav</code> is the world of character N+1.</p>
+    </div>
+    <div class="ibox">
+      <h3>Does it update while I play?</h3>
+      <p>Run it locally with <b>Start.bat</b> (Windows): it finds your save folder by itself and refreshes the page every time the game saves. In the browser, drop the files again to refresh.</p>
+    </div>
+    <div class="ibox">
+      <h3>Are my save files uploaded?</h3>
+      <p>No. The files are read by your own browser; nothing is sent to any server.</p>
+    </div>
+  </section>
+
+  <section id="tab-credits" class="tab-panel credits" hidden>
+    <h2>Version &amp; credits</h2>
+    <div class="ibox">
+      <p class="version" id="version">Version 0.4 · Updated on <time datetime="2026-10-13">October 13, 2026</time></p>
+      <p class="repo">Open source — <a href="https://github.com/marcops/Remnant2-World-Analyzer" target="_blank" rel="noopener">github.com/marcops/Remnant2-World-Analyzer</a> · <a href="https://github.com/marcops/Remnant2-World-Analyzer/archive/refs/heads/master.zip">download to run locally (automatic mode)</a></p>
+    </div>
+    <div class="ibox">
+      <h3>Credits</h3>
+      <ul>
+        <li><a href="https://github.com/AndrewSav/lib.remnant2.analyzer" target="_blank" rel="noopener">lib.remnant2.analyzer</a> by Andrew Savinykh (MIT) — its item database gives the game's item names, how to get each item, the Hardcore and co-op flags and which weapon a mod belongs to, and its world walk (how areas, events and loot are found in the save) is what the Current world and Map pages follow.</li>
+        <li><a href="https://github.com/AndrewSav/lib.remnant2.saves" target="_blank" rel="noopener">lib.remnant2.saves</a> by Andrew Savinykh (MIT) — the layout of the world save's levels and actors, and the save checksum.</li>
+        <li><a href="https://remnant2.wiki.fextralife.com/" target="_blank" rel="noopener">Remnant 2 Wiki</a> by Fextralife — item effects, tips, lore and icons, and the pages linked from each item.</li>
+        <li>Item art © Gunfire Games. Remnant 2 is a trademark of Gunfire Games / Arc Games; this is a fan project, not affiliated with them.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="tab-notes" class="tab-panel notes" hidden>
+    <h2>Release notes</h2>
+    <p class="cat">The last 5 versions.</p>
+    <div class="release">
+      <h3>Version 0.4 <time datetime="2026-10-13">October 13, 2026</time></h3>
+      <ul>
+        <li><b>Same pages as Remnant World Analyzer</b>: menu on the side, character card, and Current world, Map, World state, Tips, Items, Checklist, Traits &amp; archetypes, My character, Build &amp; DPS, Raw data, Save editor, About, credits and these notes.</li>
+        <li><b>Your world, read from save_N.sav</b>: campaign and adventure, every area with its bosses, dungeons, events, rings and amulets on the ground, trait books and simulacrums, what each drops (✔ have / ✘ don't) and what you already picked up there.</li>
+        <li><b>Map</b>: the areas of each world linked as in the game — each square with its events, the trait book and simulacrum still there and the icons of what you don't have — the part of each area you explored, and the tiles the game generated with what is still lying in each (items, trait books, chests, NPCs).</li>
+        <li><b>Checklist</b> as in Remnant World Analyzer: x of y by item type, by mode (Normal, Hardcore, Co-op, Account award) and by world, each a filter, with what you can get in your world right now.</li>
+        <li><b>Save editor</b>: scrap, irons, Lumenite, Relic Dust, Tomes of Knowledge and trait points — game closed, folder backed up first (restart Start.bat to get it). The save's checksum is a CRC-32, now worked out.</li>
+        <li><b>Build &amp; DPS</b>: damage per second of your guns at their upgrade level, from the wiki's stats.</li>
+        <li><b>Every item, with its DLCs</b>: checked against lib.remnant2.analyzer's item database and the wiki — the game's names, plus prisms, concoctions, consumables and quest items.</li>
+        <li><b>Icons, effects and how to get each item</b> from the Remnant 2 wiki; search looks in them too.</li>
+        <li>Mods that come with a weapon are linked to the right one (Fusion Cannon → Corrupted Savior, Fracture → Godsplitter).</li>
+      </ul>
+    </div>
+    <div class="release">
+      <h3>Version 0.3 <time datetime="2026-10-13">October 13, 2026</time></h3>
+      <ul>
+        <li>Every collectible of the game, read from the game files, as had or missing, by category and by world/DLC.</li>
+      </ul>
+    </div>
+    <div class="release">
+      <h3>Version 0.2 <time datetime="2026-10-13">October 13, 2026</time></h3>
+      <ul>
+        <li>Reads the save's contents: characters, archetypes, inventory and traits.</li>
+      </ul>
+    </div>
+    <div class="release">
+      <h3>Version 0.1 <time datetime="2026-10-13">October 13, 2026</time></h3>
+      <ul>
+        <li>First version: opens Remnant 2 save files; local server (Start.bat) that reads them as the game saves.</li>
+      </ul>
+    </div>
+  </section>
+    </div>
+    </div>
   </main>
+  <div id="item-drawer"></div>
 </body>
 </html>

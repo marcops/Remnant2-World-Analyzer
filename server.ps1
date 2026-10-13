@@ -159,6 +159,34 @@ function Handle($ctx) {
     return Send-Json $ctx ([ordered]@{ ok = $true; restored = $latest.name; when = $latest.when; before = $before })
   }
 
+  # Save editor: writes the edited profile.sav (game closed only; the whole folder is backed up first, and the
+  # file must not have changed since the page read it).
+  if ($path -eq '/api/save') {
+    if ($ctx.Request.HttpMethod -ne 'POST') { return Send-Text $ctx 405 'POST only' }
+    if (-not $ctx.Request.IsLocal) { return Send-Text $ctx 403 'Saving only works on the PC that runs Start.bat. Use "Download" instead.' }
+    $origin = [string]$ctx.Request.Headers['Origin']
+    if ($origin -and $origin -ne "http://$($ctx.Request.Url.Authority)") { return Send-Text $ctx 403 'Not allowed from another site.' }
+    $name = [string]$ctx.Request.QueryString['name']
+    if ($name -ne 'profile.sav') { return Send-Text $ctx 400 'Only profile.sav can be saved.' }
+    if (Test-GameRunning) { return Send-Text $ctx 409 'Remnant 2 is running. Close the game first: it rewrites profile.sav when it saves and when it quits.' }
+    $full = Join-Path $SaveDir $name
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return Send-Text $ctx 404 'profile.sav not found in the save folder.' }
+    $current = Read-Shared $full
+    $base = ([string]$ctx.Request.Headers['X-Base-Crc']).ToLower()
+    if ($base -ne [BitConverter]::ToUInt32($current, 0).ToString('x8')) {
+      return Send-Text $ctx 409 'profile.sav changed since the page read it (the game saved). Wait for the page to update and save again.'
+    }
+    $ms = New-Object IO.MemoryStream
+    $ctx.Request.InputStream.CopyTo($ms)
+    $body = $ms.ToArray()
+    # A Remnant 2 save: [crc][size][9] then the first chunk's tag.
+    if ($body.Length -lt 61 -or [BitConverter]::ToUInt32($body, 8) -ne 9 -or [BitConverter]::ToUInt32($body, 12) -ne 0x9E2A83C1) { return Send-Text $ctx 400 'That is not a valid profile.sav.' }
+    $backup = Backup-Saves
+    [IO.File]::WriteAllBytes($full, $body)
+    Write-Host "  Saved edited profile.sav (backup: $backup)" -ForegroundColor Green
+    return Send-Json $ctx ([ordered]@{ ok = $true; backup = $backup })
+  }
+
   $rel = $path.TrimStart('/')
   if ($rel -eq '') { $rel = 'index.html' }
   $full = [IO.Path]::GetFullPath((Join-Path $Root $rel))
@@ -182,7 +210,7 @@ if ($server.Lan) {
   foreach ($ip in (Get-LanAddresses)) { Write-Host "  Other PCs on your network:  http://${ip}:$($server.Port)/" -ForegroundColor Cyan }
 } else {
   Write-Host '  Other PCs on your network can''t open it yet. Once, in PowerShell run as administrator:' -ForegroundColor DarkYellow
-  Write-Host "    netsh http add urlacl url=http://+:$Port/ sddl=D:(A;;GX;;;WD)"
+  Write-Host "    netsh http add urlacl url=http://+:$Port/ ""sddl=D:(A;;GX;;;WD)"""
   Write-Host "    netsh advfirewall firewall add rule name=""Remnant 2 World Analyzer"" dir=in action=allow protocol=TCP localport=$Port profile=private"
   Write-Host '  then close this window and open Start.bat again.'
 }

@@ -73,5 +73,43 @@
     return out;
   }
 
-  return { layout: layout, decompress: decompress, strings: strings };
+  // CRC-32 (IEEE), the save's checksum.
+  var CRC_TABLE = null;
+  function crc32(parts) {
+    if (!CRC_TABLE) { CRC_TABLE = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_TABLE[n] = c >>> 0; } }
+    var crc = 0xFFFFFFFF;
+    parts.forEach(function (b) { for (var i = 0; i < b.length; i++) crc = CRC_TABLE[(crc ^ b[i]) & 0xFF] ^ (crc >>> 8); });
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  // zlib-compresses one chunk (Node: zlib; browser: CompressionStream 'deflate', which is zlib).
+  function deflate(bytes) {
+    if (typeof module !== 'undefined' && module.exports && typeof require === 'function') return Promise.resolve(new Uint8Array(require('zlib').deflateSync(bytes)));
+    var stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
+    return new Response(stream).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+
+  // The other way: decompressed data (as decompress() returns it) -> a .sav file. Header [u32 crc]
+  // [u32 data length + 8][u32 9]; the CRC-32 covers [length + 8][9][the data without its first u32], as
+  // lib.remnant2.saves (MIT) does; then 128 KiB zlib chunks with their 49-byte headers.
+  function compress(data) {
+    var chunks = [], at = 0;
+    while (at < data.length) { chunks.push(data.subarray(at, Math.min(data.length, at + 0x20000))); at += 0x20000; }
+    return Promise.all(chunks.map(deflate)).then(function (zs) {
+      var head = new Uint8Array(12), hv = new DataView(head.buffer);
+      hv.setUint32(4, data.length + 8, true); hv.setUint32(8, 9, true);
+      hv.setUint32(0, crc32([head.subarray(4, 12), data.subarray(4)]), true);
+      var total = 12; zs.forEach(function (z) { total += HEADER + z.length; });
+      var out = new Uint8Array(total), dv = new DataView(out.buffer), p = 12;
+      out.set(head, 0);
+      zs.forEach(function (z, i) {
+        var raw = chunks[i].length;
+        dv.setUint32(p, TAG, true); dv.setUint32(p + 4, 0x22222222, true); dv.setUint32(p + 8, 0x20000, true); dv.setUint32(p + 12, 0, true); out[p + 16] = 3;
+        [z.length, raw, z.length, raw].forEach(function (v, k) { dv.setUint32(p + 17 + k * 8, v, true); dv.setUint32(p + 21 + k * 8, 0, true); });
+        out.set(z, p + HEADER); p += HEADER + z.length;
+      });
+      return out;
+    });
+  }
+
+  return { layout: layout, decompress: decompress, compress: compress, crc32: function (b) { return crc32([b]); }, strings: strings };
 });

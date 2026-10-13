@@ -100,22 +100,58 @@ Relic_Consumable_ (relics), RelicFragment_, Engram_ (archetypes), Trait_.
 - Not items: bare hands/body (Weapon_Unarmed, *_Nude), archetype skill weapons (Engineer turrets, Warden
   drone), Armor_*_Base/Default, a weapon's second form, the Ragged Poppet, a stray Ring_Offering_Stone
   (the real ring, Ring_OfferingStone, has the inspect screen, the action and the event that gives it).
-- Every real weapon, armor piece, ring, amulet and archetype has an inspect screen (<name>_Inspect); the 16
-  without one and not in a save are listed apart as unconfirmed (Remnant 1 leftovers, the DLC4 folder's
-  Gambler and Paragon). Mods, mutators, relic fragments and traits never have one.
+- Checked against lib.remnant2.analyzer's item database (db.json, MIT): every collectible it has is in the
+  catalog, and it adds the kinds the file rule doesn't cover — prisms, concoctions, consumables, quest items,
+  the Dragon Heart — plus the game's display names, how to get each item, Hardcore/co-op flags, and which
+  weapon a mod belongs to.
+- Confirmed obtainable = in the database, in a save, on the wiki's list pages, or (weapons, armor, rings,
+  amulets, archetypes) with an inspect screen (<name>_Inspect). The rest are listed apart as unconfirmed:
+  Remnant 1 leftovers (Adventurer, Twisted, Bomber…), cut relic fragments and traits, the DLC4 folder's
+  Gambler and Paragon, and Weapon_Shovel (the real "Shovel" is Weapon_BasicShovel).
 - A weapon's own mod never shows up in the bag (the save holds Enigma, Monolith, Deceit, Nebula, none of
-  their mods): it lives in the weapon's folder and comes with it (40 of them).
-- Checked: every item the character holds is in the catalog (test), the 43 Trait_ files are all there.
+  their mods): it comes with its weapon. The database says which (Fusion Cannon -> Corrupted Savior, kept in
+  the Savior's folder); otherwise the wiki ("Fracture … attached to the Godsplitter"). Melee weapons' special
+  attacks (Krell Edge, Whirlwind…) are part of the weapon, not Mod_ files.
+- Concoctions and consumables stay in the bag at quantity 0 once used up, so had/missing works for them; quest
+  items leave the bag when handed over, so they are listed but not counted. A quest item kept in stages
+  (Seeker's Key 1-3) is one entry.
+- Checked: every item the character holds is in the catalog (test).
 
-| Weapons | Mods | Mutators | Armor pieces | Amulets | Rings | Relics | Relic fragments | Traits | Archetypes |
-|---|---|---|---|---|---|---|---|---|---|
-| 110 | 80 | 68 | 121 | 103 | 225 | 26 | 59 | 43 | 14 |
+## Effects, tips and icons (js/wiki.js, built by tools/wiki.mjs from the Fextralife wiki)
 
-Names come from the file names (Weapon_WorldsEdge -> "Worlds Edge"): the game's display texts are inside the
-Oodle-compressed contents.
+Each catalog item is matched to its wiki page by name on the category's list pages (Rings, Long_Guns…), then
+by a near name (the wiki writes "Rupture Canon", "Disengange"), then a page named like the item. From the page:
+the infobox's description (a weapon's line, a ring's effect), the lore quote, the "How to Get / Location"
+section, and the infobox image as the icon, at the wiki's size (tools/icons.ps1 shrinks the few over 50 KB to 200 px).
+
+## The checksum
+
+The first u32 of a .sav is a CRC-32 (IEEE) of: [u32 decompressed size + 8][u32 9][the decompressed data
+without its first u32] — as lib.remnant2.saves (MIT) computes it. Checked on profile.sav and save_0.sav;
+recompressing an unchanged save gives back the same checksum (js/sav.js `compress`).
+
+## The world save (save_N.sav, js/world.js)
+
+Root: QuestLabel, Difficulty, LastActiveRootSlot, TimePlayed, … and Containers[]: one PersistenceContainer per
+level the game remembers ({Key: "/Game/Zone_<zone>_<tile>_Gen.<level>:PersistentLevel", Blob}).
+- A container blob: [u32 version][i32 index offset][i32 dynamic offset] (from the blob start). Index:
+  count × {u64 actor id, i32 offset, i32 size}, then count × u64 destroyed actors (picked-up items, opened
+  things). Each actor: [u32 has transform][transform: 10 doubles] then an archive (names/objects offsets from the
+  actor's start, same property format). Dynamic block: count × {u64 id, transform, FString class path, FString
+  class name} — the class of spawned actors (Quest_Boss_…, ZoneActor, Ring_…).
+- Objects created at run time store an FName (u16, + i32 when the high bit is set) and an outer index.
+- Main level: Quest_Campaign_Main and Quest_AdventureMode_* actors (SlotID, Difficulty, PlayTime, respawn);
+  their ID names the roll's level Quest_<ID>_Container; components World1, Labyrinth, World2, World3,
+  RootEarth (campaign) or Quest (adventure) give each world's QuestID.
+- The roll's ZoneActors: Label (area name), ZoneLinks (waypoints, checkpoints, links to other areas), QuestID;
+  extra bytes after the properties = the explored map: f64 ?, f64 grid resolution, origin, i32, count ×
+  visited cell (3 × i16). Other actors with an ID are the events: by world quest (story, boss, miniboss,
+  dungeon: QuestState Complete = done) or by area (ZoneID: trait book, simulacrum, ring/amulet on the
+  ground, injectables: Loot.Spawns[].Destroyed = picked up). The walk follows lib.remnant2.analyzer.
+- Each visited area's tiles are levels of their own (Zone_<zone>_<n>_Gen): items still on the ground,
+  trait books (Material_TomeOfKnowledge), chests, NPCs.
 
 ## Next
 
-1. Display names (the game's localization is Oodle-compressed) and how to get each item.
-2. The world save: zones, quests/events and their state, as in Remnant 1 — what can drop in your world.
-3. The checksum, only needed to write saves.
+1. Editing amounts the save doesn't store yet (the Simulacrum): needs inserting a property.
+2. Build & DPS bonuses from traits, rings, amulets, mods and mutators.

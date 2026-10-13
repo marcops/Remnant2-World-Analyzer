@@ -53,8 +53,17 @@ test('catalog: built from the game files, no duplicate paths or names', () => {
   const keys = new Set(C.items.map((i) => i.key));
   assert.equal(keys.size, C.items.length, 'duplicate game paths');
   const names = {};
-  for (const i of C.items) { const k = i.category + '|' + i.name; assert.ok(!names[k], 'two items named ' + k); names[k] = true; }
+  for (const i of C.items.filter((x) => !x.unconfirmed)) { const k = i.category + '|' + i.name; assert.ok(!names[k], 'two items named ' + k); names[k] = true; }
   for (const i of C.items.filter((x) => x.comesWith)) assert.ok(keys.has(i.comesWith), i.name + ' comes with a weapon not in the catalog');
+});
+
+test('wiki: notes are for catalog items and their icons exist', () => {
+  const C = require('../js/catalog.js'), W = require('../js/wiki.js');
+  const keys = new Set(C.items.map((i) => i.key));
+  for (const [k, w] of Object.entries(W.items)) {
+    assert.ok(keys.has(k), k + ' is not in the catalog');
+    if (w.icon) assert.ok(fs.existsSync(new URL('../img/items/' + w.icon, import.meta.url)), 'missing icon ' + w.icon);
+  }
 });
 
 test('real profile: every item the character holds is in the catalog', { skip: !process.env.R2_PROFILE && 'set R2_PROFILE' }, async () => {
