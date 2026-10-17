@@ -16,8 +16,8 @@
     "url": "https://marcops.github.io/Remnant2-World-Analyzer/",
     "applicationCategory": "GameApplication",
     "operatingSystem": "Any (web browser)",
-    "softwareVersion": "0.4",
-    "dateModified": "2026-10-13",
+    "softwareVersion": "0.5",
+    "dateModified": "2026-10-17",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "description": "Reads Remnant 2 save files (profile.sav, save_N.sav) in the browser and shows every collectible of the game and its DLCs — weapons, mods, mutators, armor, amulets, rings, relics, relic fragments, traits, archetypes, prisms, concoctions, consumables and quest items — as had or missing, with how to get each one."
   }
@@ -50,6 +50,7 @@
     .rare-row td.name { color: var(--accent); }
     /* Map: areas of a world, linked */
     .agraph-wrap { overflow-x: auto; }
+    .seg.map-worlds { display: flex; width: fit-content; max-width: 100%; flex-wrap: wrap; margin: 22px 0 24px; }
     svg.agraph { display: block; }
     .agraph line { stroke: var(--line); stroke-width: 2; }
     .agraph .node rect.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 6; }
@@ -257,7 +258,7 @@
   <section id="tab-credits" class="tab-panel credits" hidden>
     <h2>Version &amp; credits</h2>
     <div class="ibox">
-      <p class="version" id="version">Version 0.4 · Updated on <time datetime="2026-10-13">October 13, 2026</time></p>
+      <p class="version" id="version">Version 0.5 · Updated on <time datetime="2026-10-17">October 17, 2026</time></p>
       <p class="repo">Open source — <a href="https://github.com/marcops/Remnant2-World-Analyzer" target="_blank" rel="noopener">github.com/marcops/Remnant2-World-Analyzer</a> · <a href="https://github.com/marcops/Remnant2-World-Analyzer/archive/refs/heads/master.zip">download to run locally (automatic mode)</a></p>
     </div>
     <div class="ibox">
@@ -274,6 +275,14 @@
   <section id="tab-notes" class="tab-panel notes" hidden>
     <h2>Release notes</h2>
     <p class="cat">The last 5 versions.</p>
+    <div class="release">
+      <h3>Version 0.5 <time datetime="2026-10-17">October 17, 2026</time></h3>
+      <ul>
+        <li><b>Save editor</b>: up to 9,999,999 scrap and 9,999 of every other resource; the Simulacrum (kept without an amount while you have one) can be changed too.</li>
+        <li><b>Map</b>: a campaign is shown one world at a time (the one you respawn in first), or all, as in Remnant World Analyzer.</li>
+        <li><b>Keys and quest items</b> still lying in your world: 🔑 in bold on their tile, and listed in Tips with the area and tile.</li>
+      </ul>
+    </div>
     <div class="release">
       <h3>Version 0.4 <time datetime="2026-10-13">October 13, 2026</time></h3>
       <ul>

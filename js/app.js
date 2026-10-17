@@ -313,13 +313,16 @@
       var c = t.contents, lines = [], npcs = c.npcs.filter(function (x, i) { return c.npcs.indexOf(x) === i; });
       c.items.forEach(function (n) {
         var it = BY_CLS[n.toLowerCase()], o = it ? owned(it) : null;
-        lines.push('<div class="tl' + (o === false ? ' want' : '') + '">' + (it ? '<a href="#" data-item="' + esc(it.key) + '">' + statusIcon(o) + icon(it, 'ico') + esc(it.name) + '</a>' : '· ' + esc(n.replace(/^Quest_Item_/, '').replace(/_/g, ' '))) + '</div>');
+        // Keys and other quest items lying here: 🔑, in bold.
+        var quest = /^Quest_Item_/.test(n) || (it && it.category === 'Quest item');
+        if (quest) return lines.push('<div class="tl want">🔑 ' + (it ? '<a href="#" data-item="' + esc(it.key) + '">' + icon(it, 'ico') + esc(it.name) + '</a>' : esc(n.replace(/^Quest_Item_/, '').replace(/_/g, ' '))) + '</div>');
+        lines.push('<div class="tl' + (o === false ? ' want' : '') + '">' + (it ? '<a href="#" data-item="' + esc(it.key) + '">' + statusIcon(o) + icon(it, 'ico') + esc(it.name) + '</a>' : '· ' + esc(n.replace(/_/g, ' '))) + '</div>');
       });
       if (c.traitBooks) lines.push('<div class="tl rare">▣ Trait book' + (c.traitBooks > 1 ? ' ×' + c.traitBooks : '') + '</div>');
       if (c.simulacrums) lines.push('<div class="tl rare">◆ Simulacrum</div>');
       if (c.chests) lines.push('<div class="tl">▢ ' + c.chests + ' chest' + (c.chests > 1 ? 's' : '') + '</div>');
       if (npcs.length) lines.push('<div class="tl now">☺ ' + esc(npcs.join(', ')) + '</div>');
-      var has = c.traitBooks || c.simulacrums || c.items.some(function (n) { var it = BY_CLS[n.toLowerCase()]; return it && owned(it) === false; });
+      var has = c.traitBooks || c.simulacrums || c.items.some(function (n) { var it = BY_CLS[n.toLowerCase()]; return /^Quest_Item_/.test(n) || (it && owned(it) === false); });
       return '<div class="tsq t-' + (t.type.key || 'tile') + (has ? ' has' : '') + (lines.length ? '' : ' empty') + '" title="' + esc(t.level) + '">' +
         '<div class="th">' + (t.n >= 0 && t.n < 1000 ? '#' + t.n + ' ' : '') + esc(t.type.label) + '</div><div class="tn">' + esc(t.name) + '</div>' + lines.join('') + '</div>';
     }).join('') + '</div>';
@@ -328,8 +331,21 @@
     var el = $('map-view'), m = rolled();
     if (!currentWorld()) { el.innerHTML = '<div class="empty">Load <b>save_' + state.charIndex + '.sav</b> (this character\'s world) to see its map.</div>'; return; }
     if (!m) { el.innerHTML = modeSwitch() + '<div class="empty">No rolled world in this save.</div>'; return; }
-    var html = modeSwitch() + '<div class="legend"><span class="lg">area</span><span class="cat">red border: boss · orange: has items you don\'t have · dashed: not visited yet · ◆ simulacrum · ▣ trait book still there</span></div>';
+    // A campaign spans several worlds: one at a time (the one you respawn in first), or all — as in Remnant 1.
+    state.mapWorld = state.mapWorld || {};
+    var wkey = m.key + ':' + state.charIndex;
+    if (state.mapWorld[wkey] === undefined) {
+      var resp = m.respawn, here = -1;
+      m.worlds.forEach(function (w, wi) { if (here < 0 && w.locations.some(function (l) { return l.checkpoints.indexOf(resp) >= 0 || l.waypoints.some(function (p) { return p.id === resp; }); })) here = wi; });
+      state.mapWorld[wkey] = here >= 0 ? here : 0;
+    }
+    var pick = m.worlds.length > 1 ? state.mapWorld[wkey] : null;
+    var bar = m.worlds.length > 1 ? '<div class="seg map-worlds">' + m.worlds.map(function (w, wi) {
+      return '<button type="button" data-map-world="' + wi + '" class="' + (pick === wi ? 'active' : '') + '">' + esc(worldLabelOf(w.locations[0]) || 'World') + ' <span class="cat">' + w.locations.length + '</span></button>';
+    }).join('') + '<button type="button" data-map-world="all" class="' + (pick === 'all' ? 'active' : '') + '">All worlds</button></div>' : '';
+    var html = modeSwitch() + bar + '<div class="legend"><span class="lg">area</span><span class="cat">red border: boss · orange: has items you don\'t have · dashed: not visited yet · ◆ simulacrum · ▣ trait book still there</span></div>';
     m.worlds.forEach(function (w, wi) {
+      if (pick !== null && pick !== 'all' && pick !== wi) return;
       var story = w.story ? eventInfo(w.story.name) : null;
       html += '<section class="panel zone wide"><h3>' + esc(worldLabelOf(w.locations[0]) || 'World') + (story ? ' · ' + esc(story.name) + (w.story.done ? ' ✔' : '') : '') + '</h3>' + areaGraph(w, wi) + '</section>';
       w.locations.forEach(function (loc, li) {
@@ -406,6 +422,21 @@
       if (sims.length) tips.push('<b class="rare">Simulacrum</b> still there in your ' + where + ': ' + esc(sims.join(', ')) + '.');
       if (books.length) tips.push('<b class="rare">Trait book</b> still there in ' + books.length + ' area' + (books.length > 1 ? 's' : '') + ': ' + esc(books.join(', ')) + '.');
       if (ground.length) tips.push('Rings and amulets you don\'t have, lying in your world: ' + ground.map(function (g) { return '<a href="#" data-item="' + esc(g.it.key) + '">' + icon(g.it, 'ico') + '<b>' + esc(g.it.name) + '</b></a> (' + esc(g.where) + ')'; }).join(', ') + '.');
+      // Keys and other quest items still lying in the areas you've been to (the save keeps what's left in each tile).
+      var keys = [];
+      m.worlds.forEach(function (wd) {
+        wd.locations.forEach(function (l) {
+          l.tiles.forEach(function (t) {
+            t.contents.items.forEach(function (n) {
+              var it = BY_CLS[n.toLowerCase()];
+              if (!/^Quest_Item_/.test(n) && !(it && it.category === 'Quest item')) return;
+              keys.push((it ? '<a href="#" data-item="' + esc(it.key) + '">' + icon(it, 'ico') + '<b>' + esc(it.name) + '</b></a>' : '<b>' + esc(n.replace(/^Quest_Item_/, '').replace(/_/g, ' ')) + '</b>') +
+                ' <span class="cat">' + esc(l.name + ' · ' + (t.name || t.level)) + '</span>');
+            });
+          });
+        });
+      });
+      if (keys.length) tips.push('🔑 Quest items still lying in your ' + where + ': ' + keys.join(', ') + '.');
       Object.keys(want).forEach(function (loc) {
         tips.push('<b>' + esc(loc) + '</b>: ' + want[loc].map(function (x) { return '<a href="#" data-item="' + esc(x.it.key) + '">' + icon(x.it, 'ico') + esc(x.it.name) + '</a> <span class="cat">' + esc(x.type + ' · ' + x.ev) + '</span>'; }).join(', '));
       });
@@ -700,14 +731,14 @@
       var v = f.key in draft ? draft[f.key] : f.value, changed = f.key in draft && draft[f.key] !== f.value;
       return '<tr' + (changed ? ' class="changed"' : '') + '><th>' + esc(f.label) + '</th><td class="cur">' + num(f.value) + '</td><td>' +
         (f.editable ? '<input type="number" class="ed-in" data-key="' + esc(f.key) + '" min="0" max="' + f.max + '" step="1" value="' + esc(String(v)) + '">' : '<span class="cat">can’t edit yet</span>') +
-        '</td><td class="cat">up to ' + num(f.max) + '</td></tr>';
+        '</td><td class="cat">up to ' + num(f.max) + (f.note ? ' · ' + esc(f.note) : '') + '</td></tr>';
     }).join('');
     var warn = [
       '<b>Close Remnant 2 first.</b> The game rewrites profile.sav when it saves and when it quits: it would undo the edit, or the edit would undo your progress.',
       here ? 'Saving first copies the whole save folder to <code>&lt;folder&gt;_backup_&lt;date&gt;</code>, next to it.'
         : 'Keep a copy of your current profile.sav. Then put the downloaded one in <code>%USERPROFILE%\\Saved Games\\Remnant2\\Steam\\&lt;number&gt;</code>, replacing it.',
       'Steam Cloud: if Steam asks which copy to keep, choose the <b>local</b> one.',
-      'Only resources already in your bag can be changed (pick one up in the game first). The Simulacrum is stored without an amount while you have one, so it can’t be changed yet.',
+      'Only resources already in your bag can be changed (pick one up in the game first). Up to 9,999,999 scrap and 9,999 of everything else. An item the game keeps without an amount (one Simulacrum) gets one when you save.',
       'The file is checked after the change (every value read back, checksum recomputed); still, editing saves is at your own risk.',
     ];
     el.innerHTML = '<section class="panel wide ed-box"><h3>Before you save</h3><ul class="ed-warn">' + warn.map(function (w) { return '<li>' + w + '</li>'; }).join('') + '</ul></section>' +
@@ -999,6 +1030,8 @@
     $('app').addEventListener('click', function (e) {
       var md = e.target.closest('#mode-switch [data-mode]');
       if (md) { state.mode = md.dataset.mode; store('mode', state.mode); renderWorld(); renderMap(); return; }
+      var mw = e.target.closest('.map-worlds [data-map-world]');
+      if (mw) { var mr = rolled(); state.mapWorld[mr.key + ':' + state.charIndex] = mw.dataset.mapWorld === 'all' ? 'all' : +mw.dataset.mapWorld; renderMap(); return; }
       var wc = e.target.closest('#world-worlds [data-v], #world-types [data-v]');
       if (wc) { var wk = wc.parentNode.id === 'world-worlds' ? 'evWorld' : 'evType'; state[wk] = wc.dataset.v || null; renderWorld(); return; }
       var ar = e.target.closest('[data-area]');
