@@ -741,7 +741,13 @@
       'Only resources already in your bag can be changed (pick one up in the game first). Up to 9,999,999 scrap and 9,999 of everything else. An item the game keeps without an amount (one Simulacrum) gets one when you save.',
       'The file is checked after the change (every value read back, checksum recomputed); still, editing saves is at your own risk.',
     ];
-    el.innerHTML = '<section class="panel wide ed-box"><h3>Before you save</h3><ul class="ed-warn">' + warn.map(function (w) { return '<li>' + w + '</li>'; }).join('') + '</ul></section>' +
+    // Hardcore: a character that died can be brought back.
+    var dead = null; try { dead = ED.death(profileData(), state.charIndex); } catch (e) { dead = null; }
+    var deadBox = dead && dead.dead ? '<section class="panel wide ed-box"><h3>☠ This ' + (dead.hardcore ? 'Hardcore ' : '') + 'character died</h3>' +
+      '<p>The game marks it as deceased. <b>Revive</b> clears that: deceased off, invalid exits back to 0 and, if it was at zero, the health back up — nothing else changes. Close Remnant 2 first.</p>' +
+      '<div class="ed-actions">' + (here ? '<button type="button" class="btn primary" id="ed-revive">Revive and save to the game folder</button>' : '') +
+      '<button type="button" class="btn" id="ed-revive-dl">' + (here ? 'Download revived profile.sav instead' : 'Download the revived profile.sav') + '</button></div></section>' : '';
+    el.innerHTML = deadBox + '<section class="panel wide ed-box"><h3>Before you save</h3><ul class="ed-warn">' + warn.map(function (w) { return '<li>' + w + '</li>'; }).join('') + '</ul></section>' +
       '<section class="panel wide"><h3>' + esc(ch ? ch.archetype + (ch.secondary ? ' / ' + ch.secondary : '') : 'Character ' + (state.charIndex + 1)) + '</h3>' +
       '<table class="kv ed"><tr><th>What</th><td><b>Now</b></td><td><b>New value</b></td><td></td></tr>' + rows + '</table>' +
       '<div class="ed-actions">' + (here ? '<button type="button" class="btn primary" id="ed-save"' + (changes ? '' : ' disabled') + '>Save to the game folder</button>' : '') +
@@ -809,17 +815,22 @@
       return ED.build(profileData(), state.charIndex, values);
     } catch (e) { state.editMsg = { cls: 'bad', html: esc(e.message) }; renderEditorTab(); return null; }
   }
-  function editorDownload() {
-    var p = editorBuild(); if (!p) return;
+  // The profile with the dead Hardcore character brought back (a promise), or null with the reason shown.
+  function reviveBuild() {
+    try { return ED.buildRevive(profileData(), state.charIndex); }
+    catch (e) { state.editMsg = { cls: 'bad', html: esc(e.message) }; renderEditorTab(); return null; }
+  }
+  function editorDownload(build) {
+    var p = (typeof build === 'function' ? build : editorBuild)(); if (!p) return;
     p.then(function (bytes) {
       download(bytes, 'profile.sav');
       state.editMsg = { cls: 'ok', html: 'Downloaded <b>profile.sav</b>. With the game closed, put it in your save folder (replace the old one — keep a copy of it).' };
       renderEditorTab();
     });
   }
-  function editorSave() {
-    var p = editorBuild(); if (!p) return;
-    if (!window.confirm('Write the edited profile.sav to the game folder?\n\nRemnant 2 must be closed. A copy of the whole save folder is made first.')) return;
+  function editorSave(build) {
+    var p = (typeof build === 'function' ? build : editorBuild)(); if (!p) return;
+    if (!window.confirm((build === reviveBuild ? 'Revive this character and write profile.sav to the game folder?' : 'Write the edited profile.sav to the game folder?') + '\n\nRemnant 2 must be closed. A copy of the whole save folder is made first.')) return;
     var base = new Uint8Array(state.files['profile.sav']);
     var crc = new DataView(base.buffer, base.byteOffset, base.byteLength).getUint32(0, true).toString(16);
     while (crc.length < 8) crc = '0' + crc;
@@ -1008,6 +1019,8 @@
       var id = e.target.id;
       if (id === 'ed-save') editorSave();
       else if (id === 'ed-download') editorDownload();
+      else if (id === 'ed-revive') editorSave(reviveBuild);
+      else if (id === 'ed-revive-dl') editorDownload(reviveBuild);
       else if (id === 'ed-reset') { state.editDraft[state.charIndex] = {}; state.editMsg = null; renderEditorTab(); }
       else if (id === 'ed-backup') editorBackup();
       else if (id === 'ed-restore') editorRestore();

@@ -112,10 +112,36 @@
     return out;
   }
 
+  // Hardcore death: SavedCharacter.bDeceased (written only once it's true), InvalidExitCount and the character's
+  // HealthNormalized, the same fields as Remnant 1 (USavedCharacter in the game's headers).
+  function death(data, charIndex) {
+    var L = locate(data, charIndex), p = L.saved.props;
+    return { hardcore: /Hardcore/.test(String(p.CharacterType || '')), dead: p.bDeceased === true, health: L.blob.root.props.HealthNormalized, invalidExits: p.InvalidExitCount || 0 };
+  }
+
+  // The decompressed data with the character alive again: deceased off, invalid exits 0 and, if the health was at
+  // zero, back up. Same size, so nothing around it moves; read back and checked.
+  function revive(data, charIndex) {
+    var L = locate(data, charIndex), p = L.saved.props;
+    if (p.bDeceased !== true) throw new Error('This character is not dead.');
+    var out = new Uint8Array(data), view = new DataView(out.buffer);
+    out[p._at.bDeceased.sizePos + 8] = 0;
+    var h = L.blob.root.props._at.HealthNormalized, low = h && !(L.blob.root.props.HealthNormalized > 0);
+    if (low) view.setFloat32(h.sizePos + 9, 1, true);
+    if (p._at.InvalidExitCount) view.setInt32(p._at.InvalidExitCount.valuePos, 0, true);
+    var back = death(out, charIndex);
+    if (back.dead || (low && back.health !== 1) || back.invalidExits !== 0) throw new Error('Check failed after reviving: nothing was saved.');
+    return out;
+  }
+
   return {
     RESOURCES: RESOURCES,
     fields: fields,
     apply: apply,
+    death: death,
+    revive: revive,
+    // The revived profile.sav, ready to write.
+    buildRevive: function (data, charIndex) { return SAV.compress(revive(data, charIndex)); },
     // The edited profile.sav, ready to write.
     build: function (data, charIndex, values) { return SAV.compress(apply(data, charIndex, values)); },
   };
